@@ -1,0 +1,12 @@
+Jul  3 10:00:03 server sshd[1234]: Failed password for admin from 10.0.0.50 port 52341 ssh2
+Jul  3 10:00:04 server sshd[1234]: Failed password for admin from 10.0.0.50 port 52342 ssh2
+Jul  3 10:00:05 server sshd[1234]: Failed password for admin from 10.0.0.50 port 52343 ssh2
+Jul  3 10:00:06 server sshd[1234]: Failed password for admin from 10.0.0.50 port 52344 ssh2
+Jul  3 10:00:07 server sshd[1234]: Accepted password for admin from 10.0.0.50 port 52345 ssh2
+Jul  3 10:00:09 server sshd[1235]: Failed password for invalid user test from 203.0.113.5 port 44123 ssh2
+Jul  3 10:00:10 server sshd[1235]: Failed password for invalid user root from 203.0.113.5 port 44124 ssh2
+Jul  3 10:00:11 server sshd[1235]: Failed password for invalid user ubuntu from 203.0.113.5 port 44125 ssh2
+Jul  3 10:00:15 server sudo: johndoe : TTY=pts/0 ; PWD=/home/johndoe ; USER=root ; COMMAND=/bin/cat /etc/shadow
+Jul  3 10:00:18 server sshd[1240]: Accepted publickey for deploy from 192.168.1.100 port 39281 ssh2
+Jul  3 10:00:20 server sudo: deploy : TTY=pts/1 ; PWD=/var/www ; USER=root ; COMMAND=/bin/systemctl restart nginx
+Jul  3 10:00:25 server sshd[1245]: Connection closed by 10.0.0.50 port 52345 [preauth]
