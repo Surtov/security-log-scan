@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Run tests (random order, to prove no inter-test dependencies)
+        run: >
+          pytest -p randomly
+          --cov=security_log_scan --cov-report=term-missing --cov-fail-under=90
+
+      - name: Audit dependencies for known vulnerabilities
+        run: |
+          pip install pip-audit
+          pip-audit
+
+  exit-code-gate:
+    # The README advertises the exit codes as CI-gateable. This job proves it
+    # rather than asserting it: the scan itself is the gate.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e .
+
+      - name: Clean log must pass the gate (exit 0)
+        run: |
+          printf '192.168.1.10 - - [03/Jul/2025:10:00:01 +0000] "GET / HTTP/1.1" 200 12\n' > clean.log
+          security-log-scan clean.log
+
+      - name: Logs with incidents must fail the gate (exit 1)
+        run: |
+          if security-log-scan tests/fixtures/webserver.log tests/fixtures/auth.log; then
+            echo "::error::scan exited 0 but the sample logs contain known incidents"
+            exit 1
+          fi
+          echo "Gate correctly failed the build on detected incidents."
+
+      - name: Bad config must be a usage error (exit 2), not a silent pass
+        run: |
+          printf 'nonsense_section:\n  x: 1\n' > bad.yaml
+          security-log-scan tests/fixtures/webserver.log --rules bad.yaml; code=$?
+          test "$code" -eq 2 || { echo "::error::expected exit 2, got $code"; exit 1; }
+          echo "Config errors correctly reported as exit 2."
