@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+
+# Virtualenvs
+.venv/
+venv/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Generated reports (may contain log-derived personal data)
+scan.json
+*.scan.json
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

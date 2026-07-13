@@ -1,0 +1,64 @@
+# security-log-scan detection rules.
+# Every value here mirrors the built-in defaults; omit any section or key to
+# keep its default. Unknown sections/keys are rejected (typo protection).
+
+brute_force_web:
+  enabled: true
+  threshold: 4                  # failed logins within the window to flag
+  window_seconds: 60
+  fail_statuses: [401, 403]
+  login_paths: ["/login"]
+  # What counts as the login that finally succeeded (escalates to CRITICAL).
+  # Must be a credential submission, not a page view: a GET /login -> 200 after
+  # failed POSTs is just the form re-rendering, not a compromise.
+  # Note: fail_statuses and success_statuses may not overlap. If your app
+  # returns 302 on FAILED logins too, remove 302 here.
+  success_statuses: [200, 302]
+  success_methods: [POST]
+
+brute_force_ssh:
+  enabled: true
+  threshold: 3            # failed SSH logins within the window to flag
+  window_seconds: 60
+  user_enum_threshold: 3  # distinct invalid usernames from one IP
+
+sensitive_path_scan:
+  enabled: true
+  threshold: 3            # sensitive-path hits within the window to flag
+  window_seconds: 60
+  sensitive_paths:
+    - /admin
+    - /administrator
+    - /phpmyadmin
+    - /wp-admin
+    - /wp-login.php
+    - /.env
+    - /.git
+    - /config.php
+
+path_traversal:
+  enabled: true
+
+sql_injection:
+  enabled: true
+
+rate_limit_abuse:
+  enabled: true
+  threshold: 5            # write requests to one endpoint within the window
+  window_seconds: 10
+  methods: [POST, PUT, DELETE]
+
+privilege_escalation:
+  enabled: true
+  target_users: [root]
+  sensitive_commands:     # watch list matched against the full sudo COMMAND
+    - /etc/shadow
+    - /etc/passwd
+    - /etc/sudoers
+    - .ssh/
+    - authorized_keys
+    - bash -i
+    - chmod 777
+
+correlation:
+  window_seconds: 300     # max gap between per-source activity to correlate
