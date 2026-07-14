@@ -239,6 +239,21 @@ class TestParseErrorMinimization:
         assert report["summary"]["parse_errors"] == 1
         assert report["parse_errors_truncated"] is False
 
+    def test_text_report_says_how_many_malformed_lines_it_did_not_show(self, tmp_path):
+        # The text report lists a handful of bad lines. It must still say how many
+        # it withheld, or a corrupt log looks like a mildly untidy one.
+        log = tmp_path / "web.log"
+        lines = ['192.168.1.10 - - [03/Jul/2025:10:00:01 +0000] "GET / HTTP/1.1" 200 1']
+        lines += [f"[MALFORMED {i}" for i in range(25)]
+        log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        result = run_cli(str(log))
+        assert "25 line(s) could not be parsed" in result.output
+        # The engine retains a 5-line sample (malformed lines are exactly where
+        # stray PII lands), so 5 are shown and the other 20 are accounted for
+        # rather than quietly dropped.
+        assert "... and 20 more" in result.output
+
 
 class TestConfigurability:
     def test_threshold_override_changes_detection(self, tmp_path):

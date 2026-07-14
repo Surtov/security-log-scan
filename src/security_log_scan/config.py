@@ -88,7 +88,8 @@ _LIST_FIELDS = _INT_LIST_FIELDS | _STR_LIST_FIELDS
 
 
 def load_config(path: str | None) -> dict:
-    """Return the effective config: defaults deep-merged with the YAML file, validated."""
+    """Return the effective config: defaults deep-merged with the YAML file,
+    validated."""
     config = copy.deepcopy(DEFAULTS)
     if path is None:
         return config

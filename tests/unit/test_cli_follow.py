@@ -11,8 +11,6 @@ or real printed output.
 
 from pathlib import Path
 
-import click
-import pytest
 from click.testing import CliRunner
 
 from security_log_scan import cli

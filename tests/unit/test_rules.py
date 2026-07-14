@@ -21,7 +21,7 @@ from security_log_scan.rules import (
     SensitivePathScanRule,
     SQLInjectionRule,
 )
-from security_log_scan.rules.base import EVIDENCE_CAP
+from security_log_scan.rules.base import EVIDENCE_CAP, Rule
 
 T0 = datetime(2025, 7, 3, 10, 0, 0, tzinfo=timezone.utc)
 
@@ -54,6 +54,22 @@ def run(rule, events):
         findings.extend(rule.process(event))
     findings.extend(rule.finalize())
     return findings
+
+
+class TestRuleBaseContract:
+    """A rule may implement only the hook it needs; the other must be a no-op
+    rather than something a caller has to guard against."""
+
+    def test_a_rule_that_implements_neither_hook_is_silent(self):
+        class InertRule(Rule):
+            id = "inert"
+
+            def __init__(self, config: dict):
+                pass
+
+        rule = InertRule({})
+        assert list(rule.process(web(0))) == []
+        assert list(rule.finalize()) == []
 
 
 class TestBruteForceWeb:
@@ -205,6 +221,14 @@ class TestSensitivePathScan:
     def test_below_threshold_does_not_fire(self):
         rule = SensitivePathScanRule(self.CFG)
         assert run(rule, [web(0, path="/admin"), web(1, path="/.env")]) == []
+
+    def test_hits_spread_wider_than_the_window_do_not_add_up(self):
+        # Three admin hits an hour apart are curiosity, not a scan. The window
+        # must evict old hits rather than accumulating them forever.
+        rule = SensitivePathScanRule(self.CFG)
+        events = [web(i * 3600, path=p)
+                  for i, p in enumerate(["/admin", "/.env", "/phpmyadmin"])]
+        assert run(rule, events) == []
 
 
 class TestPathTraversal:

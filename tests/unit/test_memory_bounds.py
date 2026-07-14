@@ -79,6 +79,17 @@ class TestBenignTrafficIsNotRemembered:
             rule.process(auth(i, ip(i), AUTH_ACCEPTED))
         assert rule._state == {}
 
+    def test_ssh_isolated_failures_are_released_once_their_window_expires(self):
+        # The accepted-login test above never reaches the prune sweep: allocate-late
+        # returns before it. Only a FAILED login allocates state, so this is the
+        # case that actually exercises SSH pruning - one fat-fingered password per
+        # host is not a brute force, and must not be remembered forever.
+        rule = BruteForceSSHRule({"threshold": 3, "window_seconds": 60})
+        for i in range(BENIGN_ACTORS):
+            rule.process(auth(i, ip(i), AUTH_FAILED, user="alice"))
+        assert len(rule._state) < 100, f"leaked {len(rule._state)} actors"
+        assert list(rule.finalize()) == []
+
     def test_occasional_admin_hits_are_released(self):
         rule = SensitivePathScanRule({
             "threshold": 3, "window_seconds": 60, "sensitive_paths": ["/admin"],

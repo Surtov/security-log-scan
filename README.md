@@ -35,14 +35,16 @@ security-log-scan sample-logs/webserver.log sample-logs/auth.log --format json
 Run the test suite:
 
 ```bash
-pytest                 # 137 tests
+pytest                 # 160 tests, 100% line coverage
 pytest -p randomly     # random order - proves no inter-test dependencies
+ruff check .           # lint
 ```
 
 CI (`.github/workflows/ci.yml`) runs the suite on Linux and Windows across
-Python 3.10 and 3.12 in randomized order, and includes a job that *exercises*
-the exit-code gate (clean log → 0, incidents → build fails, bad config → 2)
-rather than just claiming it works.
+Python 3.10 and 3.12 in randomized order, lints, audits dependencies, and holds
+coverage at **100%** — a floor that is allowed to slip is a floor that will. It
+also includes a job that *exercises* the exit-code gate (clean log → 0,
+incidents → build fails, bad config → 2) rather than just claiming it works.
 
 ## CLI
 

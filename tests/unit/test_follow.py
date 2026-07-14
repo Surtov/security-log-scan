@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from security_log_scan import follow
 from security_log_scan.config import DEFAULTS
 from security_log_scan.follow import (
     IDLE,
@@ -18,7 +19,13 @@ from security_log_scan.follow import (
     run_follow,
     tail_lines,
 )
-from security_log_scan.models import SOURCE_AUTH, SOURCE_WEB, Finding, Incident, Severity
+from security_log_scan.models import (
+    SOURCE_AUTH,
+    SOURCE_WEB,
+    Finding,
+    Incident,
+    Severity,
+)
 from security_log_scan.parsers import AuthLogParser, WebAccessParser
 
 T0 = datetime(2025, 7, 3, 10, 0, 0, tzinfo=timezone.utc)
@@ -189,6 +196,20 @@ class TestTailLines:
             seen.append(item[2])
         assert seen == ["aaa-long-line", "bbb-long-line", "rotated"]
 
+    def test_idle_tail_waits_between_polls(self, tmp_path):
+        # When nothing arrives, the loop must back off rather than spin the CPU.
+        # poll_seconds=0 keeps the test instant while still executing the wait.
+        log = tmp_path / "web.log"
+        log.write_text("", encoding="utf-8")
+
+        idles = 0
+        for item in bounded_tail([str(log)], poll_seconds=0):
+            assert item is IDLE  # an empty file yields nothing but idles
+            idles += 1
+            if idles == 3:  # three passes proves it looped back and waited twice
+                break
+        assert idles == 3
+
     def test_partial_line_is_not_emitted_until_complete(self, tmp_path):
         log = tmp_path / "web.log"
         log.write_text("complete\npartial-no-newline", encoding="utf-8")
@@ -304,6 +325,25 @@ class TestRunFollow:
 
         alerts = []
         assert run_follow([], DEFAULTS, 2025, alerts.append, source=source()) == 1
+
+    def test_it_builds_its_own_tail_source_when_none_is_injected(self, monkeypatch):
+        # Every other test injects a source, so the one line that wires the real
+        # tail in production was never executed by the suite. A wrong-argument
+        # regression there would only ever surface in a live run.
+        called = {}
+
+        def fake_tail_lines(paths, poll_seconds=1.0):
+            called["paths"] = paths
+            called["poll_seconds"] = poll_seconds
+            return iter([IDLE])  # finite: no infinite loop in a test
+
+        monkeypatch.setattr(follow, "tail_lines", fake_tail_lines)
+
+        alerts = []
+        run_follow(["auth.log"], DEFAULTS, 2025, alerts.append, poll_seconds=0.25)
+
+        assert called == {"paths": ["auth.log"], "poll_seconds": 0.25}
+        assert alerts == []
 
     def test_two_findings_from_one_rule_and_actor_both_alert(self):
         # One SSH rule emits TWO findings for one IP - brute force AND username

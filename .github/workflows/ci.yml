@@ -24,10 +24,15 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
 
+      - name: Lint
+        run: ruff check .
+
       - name: Run tests (random order, to prove no inter-test dependencies)
+        # The floor is the actual number: coverage that is allowed to slip is
+        # coverage that will.
         run: >
           pytest -p randomly
-          --cov=security_log_scan --cov-report=term-missing --cov-fail-under=90
+          --cov=security_log_scan --cov-report=term-missing --cov-fail-under=100
 
       - name: Audit dependencies for known vulnerabilities
         run: |

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "security-log-scan"
-version = "0.1.0"
+version = "1.0.0"
 description = "CLI tool that analyzes web access and auth logs for security incidents using configurable rules."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-randomly>=3.15",  # randomizes order: proves tests are independent
+    "ruff>=0.6",
 ]
 
 [project.scripts]
@@ -30,3 +31,28 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+# Deliberately small: pycodestyle errors, pyflakes (dead code, undefined names),
+# and import sorting. A linter that fights the house style is a linter people
+# turn off.
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests embed real log lines verbatim (a combined-log or syslog record is simply
+# longer than 88 chars). Wrapping them would either change the string under test
+# or make the fixture stop looking like the thing it stands for, so the line
+# limit is not enforced on test data. Everything else still is.
+"tests/*" = ["E501"]
+
+[tool.coverage.report]
+# The suite covers every line it can reach. The only exclusions are the
+# script entrypoint guard and defensive branches that cannot be driven from a
+# test without contorting production code.
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]

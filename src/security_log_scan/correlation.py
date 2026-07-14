@@ -34,7 +34,10 @@ def correlate(findings: list[Finding], config: dict) -> list[Incident]:
                 f"({len(actor_findings)} findings) - severity escalated"
             )
         else:
-            summary = f"{actor}: {len(actor_findings)} finding(s) in {', '.join(sources)} log"
+            summary = (
+                f"{actor}: {len(actor_findings)} finding(s) "
+                f"in {', '.join(sources)} log"
+            )
         incidents.append(
             Incident(
                 actor=actor,
@@ -55,8 +58,13 @@ def _sources_within_window(findings: list[Finding], window: timedelta) -> bool:
     ``window`` of each other (overlapping ranges count as gap zero)."""
     ranges: dict[str, tuple] = {}
     for finding in findings:
-        first, last = ranges.get(finding.source, (finding.first_seen, finding.last_seen))
-        ranges[finding.source] = (min(first, finding.first_seen), max(last, finding.last_seen))
+        first, last = ranges.get(
+            finding.source, (finding.first_seen, finding.last_seen)
+        )
+        ranges[finding.source] = (
+            min(first, finding.first_seen),
+            max(last, finding.last_seen),
+        )
 
     spans = list(ranges.values())
     for i in range(len(spans)):

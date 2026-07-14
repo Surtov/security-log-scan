@@ -7,6 +7,50 @@ def test_no_file_returns_defaults():
     assert load_config(None) == DEFAULTS
 
 
+class TestMalformedRulesFileIsRejectedClearly:
+    """Every one of these is a message a real operator will read at 3am, so each
+    should name the problem rather than leaking a stack trace."""
+
+    def test_unreadable_file_is_reported(self, tmp_path):
+        # A directory passed where a file was expected: open() raises OSError.
+        with pytest.raises(ConfigError, match="cannot read rules file"):
+            load_config(str(tmp_path))
+
+    def test_empty_file_falls_back_to_defaults(self, tmp_path):
+        # An empty YAML document parses to None - it means "override nothing",
+        # not "wipe the config".
+        rules = tmp_path / "rules.yaml"
+        rules.write_text("", encoding="utf-8")
+        assert load_config(str(rules)) == DEFAULTS
+
+    def test_top_level_must_be_a_mapping(self, tmp_path):
+        rules = tmp_path / "rules.yaml"
+        rules.write_text("- brute_force_web\n- sql_injection\n", encoding="utf-8")
+        with pytest.raises(ConfigError, match="must be a mapping of rule sections"):
+            load_config(str(rules))
+
+    def test_section_must_be_a_mapping(self, tmp_path):
+        rules = tmp_path / "rules.yaml"
+        rules.write_text("brute_force_web: 5\n", encoding="utf-8")
+        with pytest.raises(ConfigError, match="must be a mapping"):
+            load_config(str(rules))
+
+    def test_enabled_must_be_boolean(self, tmp_path):
+        # `enabled: 5` is truthy in Python - accepting it would silently mean
+        # something the operator never asked for.
+        rules = tmp_path / "rules.yaml"
+        rules.write_text("sql_injection:\n  enabled: 5\n", encoding="utf-8")
+        with pytest.raises(ConfigError, match="must be true or false"):
+            load_config(str(rules))
+
+    def test_empty_list_is_rejected(self, tmp_path):
+        # An empty login_paths list would silently disable the rule.
+        rules = tmp_path / "rules.yaml"
+        rules.write_text("brute_force_web:\n  login_paths: []\n", encoding="utf-8")
+        with pytest.raises(ConfigError, match="non-empty list"):
+            load_config(str(rules))
+
+
 def test_override_merges_with_defaults(tmp_path):
     rules = tmp_path / "rules.yaml"
     rules.write_text("brute_force_web:\n  threshold: 10\n", encoding="utf-8")

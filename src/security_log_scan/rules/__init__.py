@@ -1,11 +1,11 @@
 from security_log_scan.rules.base import Rule
-from security_log_scan.rules.brute_force_web import BruteForceWebRule
 from security_log_scan.rules.brute_force_ssh import BruteForceSSHRule
-from security_log_scan.rules.sensitive_path_scan import SensitivePathScanRule
+from security_log_scan.rules.brute_force_web import BruteForceWebRule
 from security_log_scan.rules.path_traversal import PathTraversalRule
-from security_log_scan.rules.sql_injection import SQLInjectionRule
-from security_log_scan.rules.rate_limit_abuse import RateLimitAbuseRule
 from security_log_scan.rules.privilege_escalation import PrivilegeEscalationRule
+from security_log_scan.rules.rate_limit_abuse import RateLimitAbuseRule
+from security_log_scan.rules.sensitive_path_scan import SensitivePathScanRule
+from security_log_scan.rules.sql_injection import SQLInjectionRule
 
 _RULE_CLASSES: list[type[Rule]] = [
     BruteForceWebRule,

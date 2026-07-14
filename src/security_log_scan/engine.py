@@ -41,7 +41,10 @@ def run_pipeline(paths: list[str], config: dict, log_year: int | None) -> ScanRe
 
     # Format detection only needs line-shape matching, so a placeholder year is
     # fine there; the real parser for the main pass gets the resolved year.
-    detection_parsers = [WebAccessParser(), AuthLogParser(default_year=_YEAR_PLACEHOLDER)]
+    detection_parsers = [
+        WebAccessParser(),
+        AuthLogParser(default_year=_YEAR_PLACEHOLDER),
+    ]
     parsers_by_name = {
         "web-access": WebAccessParser(),
         "auth-log": AuthLogParser(default_year=year),

@@ -44,7 +44,10 @@ class Alert:
 
     def format(self) -> str:
         suffix = f"  [correlated: {'+'.join(self.sources)}]" if self.correlated else ""
-        return f"[{self.severity.name}] {self.actor} {self.rule}: {self.message}{suffix}"
+        return (
+            f"[{self.severity.name}] {self.actor} {self.rule}: "
+            f"{self.message}{suffix}"
+        )
 
 
 class _LazyParser:

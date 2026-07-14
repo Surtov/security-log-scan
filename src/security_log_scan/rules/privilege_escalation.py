@@ -10,7 +10,13 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from security_log_scan.models import SOURCE_AUTH, SUDO_COMMAND, Finding, LogEvent, Severity
+from security_log_scan.models import (
+    SOURCE_AUTH,
+    SUDO_COMMAND,
+    Finding,
+    LogEvent,
+    Severity,
+)
 from security_log_scan.rules.base import Rule, add_evidence
 
 

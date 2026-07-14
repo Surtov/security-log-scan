@@ -109,6 +109,12 @@ class TestAuthLogParser:
         line = '192.168.1.10 - - [03/Jul/2025:10:00:01 +0000] "GET / HTTP/1.1" 200 1'
         assert self.parser.try_parse(line, 1, "f") is None
 
+    def test_impossible_calendar_date_is_skipped_not_crashed(self):
+        # Feb 30 matches the syslog shape but is not a real date. datetime()
+        # raises ValueError; the line is skipped rather than killing the scan.
+        line = "Feb 30 10:00:03 server sshd[1]: Failed password for a from 10.0.0.50 port 1 ssh2"
+        assert self.parser.try_parse(line, 1, "auth.log") is None
+
 
 class TestDetectParser:
     def _parsers(self):
@@ -127,3 +133,19 @@ class TestDetectParser:
         bogus.write_text("this is not a log\nneither is this\n", encoding="utf-8")
         with pytest.raises(UnknownFormatError):
             detect_parser(str(bogus), self._parsers())
+
+    def test_blank_lines_do_not_confuse_detection(self, tmp_path):
+        log = tmp_path / "web.log"
+        log.write_text(
+            '\n   \n192.168.1.10 - - [03/Jul/2025:10:00:01 +0000] "GET / HTTP/1.1" 200 1\n',
+            encoding="utf-8",
+        )
+        assert detect_parser(str(log), self._parsers()).name == "web-access"
+
+    def test_detection_stops_sampling_after_the_cap(self, tmp_path):
+        # Detection reads a bounded sample, not the whole file - otherwise
+        # identifying a multi-GB log would mean reading a multi-GB log.
+        log = tmp_path / "web.log"
+        line = '192.168.1.10 - - [03/Jul/2025:10:00:01 +0000] "GET / HTTP/1.1" 200 1\n'
+        log.write_text(line * 200, encoding="utf-8")
+        assert detect_parser(str(log), self._parsers()).name == "web-access"

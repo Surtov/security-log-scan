@@ -16,7 +16,9 @@ from security_log_scan.rules.base import (
 
 
 class _IpState:
-    __slots__ = ("fails", "peak", "total_fails", "success_after", "first", "last", "evidence")
+    __slots__ = (
+        "fails", "peak", "total_fails", "success_after", "first", "last", "evidence",
+    )
 
     def __init__(self):
         self.fails: deque = deque()
