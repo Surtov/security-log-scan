@@ -1,10 +1,13 @@
 # security-log-scan
 
+[![CI](https://github.com/Surtov/security-log-scan/actions/workflows/ci.yml/badge.svg)](https://github.com/Surtov/security-log-scan/actions/workflows/ci.yml)
+
 A command-line tool that analyzes web access logs and Linux auth logs for
 security incidents using configurable detection rules, and correlates
 findings across log sources.
 
-Runs as a one-shot scan or as a live monitor (`--follow`).
+Runs as a one-shot scan, or as a live monitor that alerts as attacks unfold
+(`--follow`).
 
 > **AI collaboration:** this tool was built with Claude Code using a
 > plan → build → adversarially-review → fix loop. The full conversation history,
@@ -53,7 +56,14 @@ security-log-scan FILE [FILE ...] [options]
                         the exit code (default: low)
   --log-year YEAR       Year for syslog timestamps (auth.log carries none);
                         defaults to the year observed in a co-processed web log
+  -f, --follow          Live mode: tail the files and alert as detections fire
+                        (Ctrl-C to stop). Survives log rotation.
+  --poll-seconds N      How often --follow checks for new lines (default: 1.0)
 ```
+
+`--follow` streams alerts to stdout, so it is not combined with `--output` or
+`--format json` (a batch report format has no meaning for a stream that never
+ends); the combination is rejected rather than half-supported.
 
 Exit codes: `0` no incidents at/above the floor, `1` incidents found
 (CI-gateable), `2` usage, config, input-format, **or report-write** error.
@@ -175,23 +185,44 @@ fine for batch scans and for `--follow` on a normal server, but a high-volume
 production deployment would want the regex-heavy parsers optimized or the work
 sharded per file.
 
-## Processing model: batch today, streaming-ready by design
+## Real-time monitoring (`--follow`)
 
-This is a **batch** tool: it reads each file to end-of-stream, flushes the rules,
-prints a report, and exits. It is **not** a live monitoring daemon today.
+Point it at live logs and it alerts as attacks unfold:
 
-What it *does* do is process logs the way a real-time system would have to:
-line-by-line with generators, push-based rules (`process()` per event,
-`finalize()` at end of stream), and windowed state held in time-evicted deques
-with capped evidence — so **memory stays bounded regardless of input size**. That
-is the honest answer to the "high volume, continuous" production context: the
-tool scales to large files today, and a `--follow` mode would replace the file
-iterator with a tailing source without touching a single detection rule.
+```bash
+security-log-scan /var/log/nginx/access.log /var/log/auth.log --follow
+```
 
-Making it genuinely real-time would additionally require handling log rotation,
-a flush cadence for still-open time windows, and de-duplication of repeated
-alerts for an attack still in progress. Those are deliberately not built rather
-than half-built — see Future work.
+```
+[MEDIUM]   10.0.0.50 brute_force_web: 4 failed login attempts within 60s (no success observed)
+[CRITICAL] 10.0.0.50 brute_force_web: 4 failed login attempts followed by a successful login
+                     - likely account compromise  [correlated: auth+web]
+[HIGH]     203.0.113.9 sql_injection: 1 SQL injection payload(s), e.g. 'q=1 UNION SELECT * FROM users--'
+```
+
+The same detection rules serve both modes — the tail source simply replaces the
+file reader. Three things make it usable rather than merely working:
+
+- **Alerts de-duplicate.** Rules re-derive findings from accumulated state on
+  every flush, so a naive loop would re-alert an ongoing attack on every poll.
+  An alert re-fires only when the situation genuinely *worsens*: severity
+  escalates, or the attack continues. The `MEDIUM → CRITICAL` pair above is that
+  working — the attacker's eventual success breaks through the de-duplication.
+- **Log rotation is survived.** If the file is truncated or replaced, the tail
+  notices it shrank and re-reads from the top instead of going silent.
+- **Partial writes are handled.** A line caught mid-write is not parsed until its
+  newline arrives.
+
+Memory does not grow with uptime: state is retained only for actors that are
+actually suspicious (see below), so a long-running monitor does not accumulate
+every user who ever logged in.
+
+## Processing model
+
+Batch and live share one streaming pipeline: files are read line-by-line with
+generators, rules are push-based (`process()` per event, `finalize()` to flush),
+and windowed state lives in time-evicted deques with capped evidence. Nothing
+loads a whole log into memory.
 
 ## Robustness: log content is attacker-controlled
 
@@ -258,10 +289,8 @@ indefinitely.
 
 ## Future work (deliberately not built)
 
-- **A `--follow` (real-time) mode.** The pipeline is single-pass and push-based,
-  so a `tail -f`/syslog/Kafka source could replace the file reader without
-  touching detection code. It would need rotation handling, a periodic flush for
-  open windows, and alert de-duplication to be worth shipping.
+- **Other ingestion sources.** `--follow` tails files today; a syslog or Kafka
+  source would slot into the same pipeline without touching a detection rule.
 - A `--redact` mode (IP truncation / username hashing in evidence lines) for
   reports shared beyond the incident-response boundary.
 - Additional detections (XSS payloads, SSRF-indicative URLs, 404-ratio and
