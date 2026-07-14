@@ -114,15 +114,34 @@ history showed the file had exactly 22 tests before and after the change, so the
 23 was an arithmetic slip in the architect's own plan. And the review refused
 the lazy fixes on principle: no timeout increases, no retries, no `os.chdir` in
 a fixture (global state that random-order execution would convert into brand-new
-order-dependent flakes). The same session also caught this README's sibling
-advertising 94 tests when the suite has had 135 since the follow-mode work.
+order-dependent flakes). The same session also caught the README still
+advertising 94 tests when the suite had grown to 135 during the follow-mode work.
+
+### 5. A second OWASP review — of only the *new* code — caught a silently dropped alert
+
+The first OWASP review ran against the batch tool. After `--follow` and the memory
+work were added, I ran it again, pointed specifically at the code that hadn't
+existed the first time. It found a real detection loss.
+
+`brute_force_ssh` emits **two** findings for one IP — "SSH brute force" and "SSH
+username enumeration" — that share a rule id. The real-time alert de-duplicator
+keyed on `(rule, actor)`, so the two collided and the second was silently
+swallowed. It reproduces on the brief's own sample data: `203.0.113.5` does three
+invalid-user probes, and a live `--follow` analyst would see the brute-force alert
+but *never* the enumeration one. Batch mode was fine — both findings reach the
+report — which is precisely why 135 green tests never caught it: nothing exercised
+the follow-mode de-dup path with a two-finding rule. One-line fix (category joins
+the key); a test that fails before and passes after pins it.
 
 ## The takeaway
 
 AI review is very good at reasoning about code, and it will confidently agree that
 a plausible architecture has a property it does not actually have. **Review, then
-measure, then run it everywhere — then vary *how* you run it** — each layer sees
-a class of defect the one before it is blind to.
+measure, then run it everywhere, vary *how* you run it — and re-review the new code
+as new code** — each layer sees a class of defect the one before it is blind to.
+The last one matters most: the follow-mode bug lived in code added *after* the
+original security pass, and it took a review scoped deliberately at the new surface
+to surface it.
 
 ## Where I overrode the AI
 

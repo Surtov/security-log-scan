@@ -304,3 +304,26 @@ class TestRunFollow:
 
         alerts = []
         assert run_follow([], DEFAULTS, 2025, alerts.append, source=source()) == 1
+
+    def test_two_findings_from_one_rule_and_actor_both_alert(self):
+        # One SSH rule emits TWO findings for one IP - brute force AND username
+        # enumeration. They must not collide in de-duplication: an analyst who
+        # sees only "brute force" and never "username enumeration" is missing a
+        # distinct signal. (203.0.113.5 in the sample auth.log does exactly this.)
+        def auth(sec, user):
+            return (
+                f"Jul  3 10:00:{sec:02d} server sshd[1]: Failed password for "
+                f"invalid user {user} from 203.0.113.5 port 4000{sec} ssh2"
+            )
+
+        def source():
+            for line_no, (sec, user) in enumerate(
+                [(9, "test"), (10, "root"), (11, "ubuntu")], start=1
+            ):
+                yield ("auth.log", line_no, auth(sec, user))
+            yield IDLE
+
+        alerts = []
+        run_follow([], DEFAULTS, 2025, alerts.append, source=source())
+        categories = {a.category for a in alerts if a.actor == "203.0.113.5"}
+        assert categories == {"SSH brute force", "SSH username enumeration"}

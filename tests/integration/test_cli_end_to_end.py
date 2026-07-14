@@ -55,6 +55,16 @@ class TestFullScan:
         assert incident["sources"] == ["auth", "web"]
         assert incident["severity"] == "CRITICAL"
 
+    def test_ssh_scanner_yields_both_brute_force_and_enumeration(self):
+        # 203.0.113.5 trips two brute_force_ssh findings at once. Batch reports
+        # both; --follow must too (its de-dup keys on category as well as rule).
+        # This pins the two paths consistent.
+        _, report = run_json()
+        incident = next(i for i in report["incidents"] if i["actor"] == "203.0.113.5")
+        categories = {f["category"] for f in incident["findings"]}
+        assert "SSH brute force" in categories
+        assert "SSH username enumeration" in categories
+
     def test_benign_actors_are_not_flagged(self):
         _, report = run_json()
         actors = {i["actor"] for i in report["incidents"]}

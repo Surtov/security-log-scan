@@ -154,13 +154,17 @@ class AlertTracker:
     """
 
     def __init__(self):
-        self._seen: dict[tuple[str, str], tuple[Severity, int]] = {}
+        self._seen: dict[tuple[str, str, str], tuple[Severity, int]] = {}
 
     def new_alerts(self, incidents: list[Incident]) -> list[Alert]:
         alerts: list[Alert] = []
         for incident in incidents:
             for finding in incident.findings:
-                key = (finding.rule, finding.actor)
+                # Category is part of the key: one rule can emit several distinct
+                # findings for the same actor (SSH brute force AND username
+                # enumeration), and keying on rule+actor alone would collapse them
+                # into one, silently dropping the rest.
+                key = (finding.rule, finding.category, finding.actor)
                 previous = self._seen.get(key)
                 current = (incident.severity, finding.count)
                 if previous is not None and not _worsened(previous, current):

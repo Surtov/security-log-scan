@@ -35,7 +35,7 @@ security-log-scan sample-logs/webserver.log sample-logs/auth.log --format json
 Run the test suite:
 
 ```bash
-pytest                 # 135 tests
+pytest                 # 137 tests
 pytest -p randomly     # random order - proves no inter-test dependencies
 ```
 
@@ -259,7 +259,16 @@ Both behaviors are covered by regression tests in
 - Memory scales with the number of concurrent **suspects**. Benign actors are
   released, but a distributed attack from a very large number of distinct
   hostile IPs would still grow state; a hard cap with LRU eviction would be the
-  next step.
+  next step. (In `--follow`, the de-duplication table and the three non-windowed
+  rules retain per-attacker state for the life of the process — same LRU fix.)
+- **No maximum line length.** A single log line with no newline is read whole.
+  Normal log writers newline-terminate each record, so this needs an attacker
+  able to append a giant unterminated line to the monitored file; a byte cap on
+  the read would close it.
+- **`--follow` picks a file's format from its first parseable line** (batch mode
+  samples several and takes the majority). Well-formed web and auth lines cannot
+  match each other's parser, so in practice this only matters for a file whose
+  very first line is foreign — worth knowing, not worth a format war.
 
 ## Assumptions (explicit)
 
