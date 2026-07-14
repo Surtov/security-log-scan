@@ -31,6 +31,9 @@ jobs:
 
       - name: Audit dependencies for known vulnerabilities
         run: |
+          # The 3.10 toolcache images ship a vulnerable setuptools 65.5.0;
+          # upgrade it so the audit checks our real dependency surface.
+          pip install --upgrade setuptools
           pip install pip-audit
           pip-audit
 
@@ -62,6 +65,8 @@ jobs:
       - name: Bad config must be a usage error (exit 2), not a silent pass
         run: |
           printf 'nonsense_section:\n  x: 1\n' > bad.yaml
-          security-log-scan tests/fixtures/webserver.log --rules bad.yaml; code=$?
+          # `|| code=$?` keeps the expected non-zero exit from tripping `set -e`.
+          code=0
+          security-log-scan tests/fixtures/webserver.log --rules bad.yaml || code=$?
           test "$code" -eq 2 || { echo "::error::expected exit 2, got $code"; exit 1; }
           echo "Config errors correctly reported as exit 2."

@@ -156,9 +156,11 @@ class TestTailLines:
 
     def test_recovers_from_truncation_by_rereading(self, tmp_path):
         # Log rotation: the file shrinks underneath us and must be re-read from
-        # the top, not silently skipped forever.
+        # the top, not silently skipped forever. The replacement content must be
+        # strictly shorter than the original: detection is size-based, so a
+        # same-size rewrite is invisible on platforms without \r\n translation.
         log = tmp_path / "web.log"
-        log.write_text("aaa\nbbb\n", encoding="utf-8")
+        log.write_text("aaa-long-line\nbbb-long-line\n", encoding="utf-8")
 
         seen = []
         idles = 0
@@ -170,7 +172,7 @@ class TestTailLines:
                     continue
                 break
             seen.append(item[2])
-        assert seen == ["aaa", "bbb", "rotated"]
+        assert seen == ["aaa-long-line", "bbb-long-line", "rotated"]
 
     def test_partial_line_is_not_emitted_until_complete(self, tmp_path):
         log = tmp_path / "web.log"
