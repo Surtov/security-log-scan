@@ -159,20 +159,25 @@ The tool has no allow-list or block-list of actors: an attacker is anyone whose
 
 ## Memory and throughput
 
-Measured, not asserted. Peak memory via `tracemalloc` on a full scan:
+Measured, not asserted:
 
-| lines | file size | peak memory | time |
-|---|---|---|---|
-| 10,000 | 0.8 MB | 0.6 MB | 1.8 s |
-| 100,000 | 8.3 MB | 0.2 MB | 13.6 s |
-| 1,000,000 | 83.1 MB | **0.2 MB** | 184 s |
+| lines | file size | peak memory | scan time | throughput |
+|---|---|---|---|---|
+| 100,000 | 8.3 MB | 0.2 MB | 2.7 s | ~36,000 lines/sec |
+| 1,000,000 | 83.1 MB | **0.2 MB** | 31.2 s | ~32,000 lines/sec |
+
+Timings are from a clean run; peak memory is from a separate run under
+`tracemalloc`. Keeping them separate matters — the profiler instruments every
+allocation and slows the scan by about **5×**, so timing a profiled run measures
+the profiler, not the tool. (An earlier version of this table did exactly that
+and under-reported throughput sixfold.)
 
 **Memory is flat in the size of the log.** What it *does* scale with is the
 number of distinct **suspects** — actors currently showing a suspicious signal.
 Innocent actors are released once their time window expires, so a log with a
 million distinct benign IPs costs nothing to scan.
 
-This claim used to be false, and running the benchmark is what caught it. The
+That claim used to be false, and running the benchmark is what caught it. The
 rules allocated per-actor state the moment an IP touched a rule's trigger
 surface — *including a perfectly ordinary successful login* — and never released
 it, so peak memory grew linearly and hit **198 MB at 1M lines**. The fix was to
@@ -180,10 +185,9 @@ allocate late (a success is not the start of a brute force) and to prune actors
 whose window expired with nothing to show. `tests/unit/test_memory_bounds.py`
 pins the behavior; a suspect is never pruned, so no detection can be lost.
 
-Throughput is the honest weak spot: **~5,400 lines/sec** single-threaded. That is
-fine for batch scans and for `--follow` on a normal server, but a high-volume
-production deployment would want the regex-heavy parsers optimized or the work
-sharded per file.
+Throughput is single-threaded and parser-bound (the regexes are the hot path).
+~32k lines/sec comfortably covers batch scans and `--follow` on a normal server;
+a genuinely high-volume deployment would shard the work per file.
 
 ## Real-time monitoring (`--follow`)
 
@@ -298,4 +302,5 @@ indefinitely.
   as new `Rule` subclasses.
 - A hard cap (LRU) on tracked suspects, to bound memory even under a
   large-scale distributed attack.
-- Parser throughput: the regexes are the hot path at ~5,400 lines/sec.
+- Parser throughput: the regexes are the hot path (~32k lines/sec, single
+  threaded). Sharding per file would be the cheapest win.
