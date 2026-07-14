@@ -7,6 +7,8 @@ synchronization, because a tailing test that waits on the clock is a flaky test.
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from security_log_scan.config import DEFAULTS
 from security_log_scan.follow import (
     IDLE,
@@ -20,6 +22,19 @@ from security_log_scan.models import SOURCE_AUTH, SOURCE_WEB, Finding, Incident,
 from security_log_scan.parsers import AuthLogParser, WebAccessParser
 
 T0 = datetime(2025, 7, 3, 10, 0, 0, tzinfo=timezone.utc)
+
+MAX_TAIL_ITEMS = 10_000  # far above the handful of items any test legitimately sees
+
+
+def bounded_tail(*args, **kwargs):
+    """tail_lines, but fail fast instead of hanging CI if the loop never terminates."""
+    for i, item in enumerate(tail_lines(*args, **kwargs)):
+        if i >= MAX_TAIL_ITEMS:
+            pytest.fail(
+                f"tail_lines yielded {MAX_TAIL_ITEMS} items without the test loop "
+                "terminating - IDLE / expected-line handling has regressed"
+            )
+        yield item
 
 
 def finding(rule="brute_force_web", actor="10.0.0.50", count=4):
@@ -118,7 +133,7 @@ class TestTailLines:
     def _drain(self, path, **kw):
         """Read until the first IDLE - i.e. all currently available lines."""
         items = []
-        for item in tail_lines([str(path)], poll_seconds=0, **kw):
+        for item in bounded_tail([str(path)], poll_seconds=0, **kw):
             if item is IDLE:
                 break
             items.append(item)
@@ -142,7 +157,7 @@ class TestTailLines:
 
         seen = []
         idles = 0
-        for item in tail_lines([str(log)], poll_seconds=0):
+        for item in bounded_tail([str(log)], poll_seconds=0):
             if item is IDLE:
                 idles += 1
                 if idles == 1:
@@ -164,7 +179,7 @@ class TestTailLines:
 
         seen = []
         idles = 0
-        for item in tail_lines([str(log)], poll_seconds=0):
+        for item in bounded_tail([str(log)], poll_seconds=0):
             if item is IDLE:
                 idles += 1
                 if idles == 1:

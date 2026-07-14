@@ -9,6 +9,8 @@ Nothing here asserts on the substitute: every assertion is on a real exit code
 or real printed output.
 """
 
+from pathlib import Path
+
 import click
 import pytest
 from click.testing import CliRunner
@@ -17,7 +19,7 @@ from security_log_scan import cli
 from security_log_scan.follow import Alert
 from security_log_scan.models import Severity
 
-FIXTURE = "tests/fixtures/webserver.log"
+FIXTURE = str(Path(__file__).parent.parent / "fixtures" / "webserver.log")
 
 
 def alert(severity=Severity.CRITICAL, actor="10.0.0.50"):

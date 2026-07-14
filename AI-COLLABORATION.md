@@ -35,7 +35,7 @@ tests, because precision is the hard part. `?q=O'Brien` is not SQL injection, an
 10, API Security, Auth Testing, Privacy/GDPR, Test Data & Secrets — followed by a
 Release Risk go/no-go gate.
 
-## Three layers of defect, three different ways of finding them
+## Four layers of defect, four different ways of finding them
 
 The interesting result is that each layer caught things the previous one could
 not. That escalation is the whole argument for this workflow.
@@ -87,12 +87,42 @@ Also caught: a vulnerable `setuptools` in the Python 3.10 toolcache image, and a
 shell bug where `cmd; code=$?` dies under `set -e` before the exit code can be
 captured — so the exit-code gate was not testing what it claimed to.
 
+### 4. A flake review caught what a permanently green CI could not
+
+Later, I ran a dedicated flake review over the finished suite. It found that all
+9 `--follow` CLI tests depended on the **current working directory**: the fixture
+path was resolved relative to wherever pytest was launched. CI had been green the
+whole time and always would have been — every matrix cell runs pytest from the
+repo root, so no amount of "run it everywhere" could surface it. The suite only
+failed from an IDE test runner or any other directory. The reviewer proved the
+claim before making it: 9 failures from a foreign directory, 9 passes from the
+repo root, then the same repro flipped to 9/9 green after a one-line
+`__file__`-relative fix.
+
+The same pass found a subtler hazard: the tail-loop tests iterate an
+intentionally *infinite* generator, so a regression in the loop's exit condition
+would not fail CI — it would **hang** it until the 6-hour job kill, across all
+four matrix cells. The fix (`bounded_tail`, an iteration cap) converts the hang
+into a millisecond failure that names its cause. A count-based cap was chosen
+over a pytest-timeout dependency deliberately: a clock threshold tuned for the
+slowest CI cell is itself a mild flake vector.
+
+Two workflow details worth recording. The implementing agent **halted
+mid-validation** because the approved plan predicted 23 tests and the run
+collected 22 — rather than assume a typo, it stopped and reported; checking git
+history showed the file had exactly 22 tests before and after the change, so the
+23 was an arithmetic slip in the architect's own plan. And the review refused
+the lazy fixes on principle: no timeout increases, no retries, no `os.chdir` in
+a fixture (global state that random-order execution would convert into brand-new
+order-dependent flakes). The same session also caught this README's sibling
+advertising 94 tests when the suite has had 135 since the follow-mode work.
+
 ## The takeaway
 
 AI review is very good at reasoning about code, and it will confidently agree that
 a plausible architecture has a property it does not actually have. **Review, then
-measure, then run it everywhere** — each layer sees a class of defect the one
-before it is blind to.
+measure, then run it everywhere — then vary *how* you run it** — each layer sees
+a class of defect the one before it is blind to.
 
 ## Where I overrode the AI
 
@@ -4573,5 +4603,161 @@ The `security-log-scan/` folder is showing as its own repository — meaning it 
 <details><summary>actions taken</summary>
 
 - ran: Add memory index entry
+
+</details>
+
+---
+
+*Session of 2026-07-14 — flake review and test-stabilization pass. Prose lightly
+condensed for length; tool calls summarized as elsewhere.*
+
+## 👤 User
+
+/qa-flake-review — inspect flaky patterns; do not edit files; do not increase
+timeouts as the first fix.
+
+### 🤖 Claude
+
+
+<details><summary>actions taken</summary>
+
+- Read: qa-toolkit workflow 04-test-stabilization.md and the Flakiness Reviewer agent definition
+- Read: all 8 test files, follow.py, engine.py, pyproject.toml, .github/workflows/ci.yml
+- Grep: tests for datetime.now / sleep / random — zero hits
+- ran: pytest tests/unit/test_cli_follow.py from the repo root (9 passed)
+- ran: the same file from a foreign working directory (9 failed — repro confirmed)
+
+</details>
+
+### 🤖 Claude
+
+**TLDR:** The suite is deliberately and effectively flake-hardened — fixed
+injected timestamps, injectable tail sources instead of sleeps, `tmp_path`
+isolation, randomized order in CI, no retries anywhere. One **confirmed**
+environment-dependence defect and two low-risk latent items. No fix involves
+touching a timeout.
+
+1. **cwd-relative fixture path (Medium, confirmed by reproduction).**
+   `test_cli_follow.py` hardcodes `FIXTURE = "tests/fixtures/webserver.log"`,
+   resolved against the process cwd; every sibling file already derives fixture
+   paths from `__file__`. All 9 tests fail from any other directory, and the
+   failure mode is misleading: click rejects the missing file with exit 2, so
+   assertions report `assert 2 == 1` far from the real cause.
+2. **Tail-loop tests hang instead of failing on regression (Low).** The
+   `TestTailLines` loops iterate the intentionally infinite
+   `tail_lines(..., poll_seconds=0)`; if IDLE/expected-line handling ever
+   regresses, the test busy-spins until the 6-hour GitHub Actions kill.
+3. **Latent wall-clock reads in product code (Low, watch item).** `engine.py`
+   falls back to the current year for auth-only scans; `json_report.py` embeds
+   `generated_at`. No current test depends on either — guard by convention:
+   future auth-only tests pin `--log-year`; never snapshot-compare full JSON.
+
+---
+
+## 👤 User
+
+ok create an implmentation plan using qa architect
+
+### 🤖 Claude
+
+
+<details><summary>actions taken</summary>
+
+- delegated to subagent: qa-architect (turn the findings into an implementation plan — read-only)
+- Write: plan file — two changes: (1) `__file__`-relative fixture path; (2) a
+  `bounded_tail` wrapper capping iterations, swapped at exactly three call sites.
+  The cap was chosen over a pytest-timeout dependency deliberately: count-based
+  so immune to runner speed, no new dependency, and it fails with a message
+  naming the exact regression instead of a generic worker kill.
+
+</details>
+
+## 👤 User
+
+*(approved the plan)*
+
+### 🤖 Claude
+
+
+<details><summary>actions taken</summary>
+
+- delegated to subagent: qa-test-automation-engineer (implement the two approved changes and run the validation ladder)
+- ran: git show HEAD:tests/unit/test_follow.py — count test methods (22, same as working tree)
+- ran: full suite twice with -p randomly and the coverage gate
+
+</details>
+
+### 🤖 Claude
+
+The engineer applied both changes and validated the cwd fix (9 failed → 9 passed
+from a foreign directory), then **stopped mid-validation**: the plan predicted 23
+tests in `test_follow.py` and the run collected 22. Rather than assume the plan
+had a typo, it reported the deviation and made no further changes. Git history
+confirmed the file had exactly 22 test methods before and after the edit — the
+23 was an arithmetic slip in the architect's plan (it counted `TestTailLines` as
+7 instead of 6). Validation then completed clean: **135 tests × two random-order
+seeds, coverage 97.32%** against the 90% gate, unchanged from before.
+
+---
+
+## 👤 User
+
+review and prepare comit.
+
+### 🤖 Claude
+
+
+<details><summary>actions taken</summary>
+
+- ran: git status / git diff / git log (read-only review — exactly the two planned files changed)
+- ran: git add tests/unit/test_cli_follow.py tests/unit/test_follow.py
+
+</details>
+
+### 🤖 Claude
+
+Diff reviewed clean — the two planned changes and nothing else; generator
+lifecycle on early `break` verified unchanged (refcounting closes the wrapper
+and the inner tail promptly, same as before). Commit message prepared; not
+committed without explicit approval.
+
+---
+
+## 👤 User
+
+Check if documentation is stale and prepare update in this comit as well
+
+### 🤖 Claude
+
+
+<details><summary>actions taken</summary>
+
+- Read: README.md, AI-COLLABORATION.md
+- ran: verify sample-logs/ exists and is tracked (it does — quick-start paths fine)
+- Edit: README.md — quick-start test count 94 → 135 (stale since the follow-mode suites landed)
+- ran: git add README.md
+
+</details>
+
+### 🤖 Claude
+
+The only stale claim was the README advertising **94 tests**; the suite has been
+135 since the follow-mode work. CI description matches ci.yml; nothing documents
+the pre-fix cwd constraint. This collaboration log did not cover the session —
+flagged for the owner rather than ghost-written.
+
+---
+
+## 👤 User
+
+yes draft changes for ai collaboration as well. and allso include this session if it serves the test purpose
+
+### 🤖 Claude
+
+
+<details><summary>actions taken</summary>
+
+- Edit: AI-COLLABORATION.md — added §4 to the defect-layers summary and appended this session
+- ran: git add AI-COLLABORATION.md
 
 </details>

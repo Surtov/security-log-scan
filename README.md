@@ -35,7 +35,7 @@ security-log-scan sample-logs/webserver.log sample-logs/auth.log --format json
 Run the test suite:
 
 ```bash
-pytest                 # 94 tests
+pytest                 # 135 tests
 pytest -p randomly     # random order - proves no inter-test dependencies
 ```
 
