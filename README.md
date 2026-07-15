@@ -179,6 +179,14 @@ number of distinct **suspects** — actors currently showing a suspicious signal
 Innocent actors are released once their time window expires, so a log with a
 million distinct benign IPs costs nothing to scan.
 
+A more adversarial re-run puts a number on the constant. With 3% of lines being
+benign POSTs from never-returning IPs — so every one of them touches the
+rate-limit rule's trigger surface — peak memory rises to **8.7 MB and plateaus
+there, identical at 1M and 2M lines**. The bound is the prune cadence, not the
+file: idle-state sweeps are amortized (every 5,000 qualifying events per rule),
+so up to that many benign per-actor states can be alive between sweeps. Traffic
+that never trips a rule's trigger surface stays at the 0.2 MB floor above.
+
 That claim used to be false, and running the benchmark is what caught it. The
 rules allocated per-actor state the moment an IP touched a rule's trigger
 surface — *including a perfectly ordinary successful login* — and never released
