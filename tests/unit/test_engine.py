@@ -35,7 +35,12 @@ class TestResolveLogYear:
         # to learn nothing.
         log = tmp_path / "auth.log"
         log.write_text((AUTH_LINE + "\n") * 60, encoding="utf-8")
-        assert resolve_log_year([str(log)], None) == datetime.now(timezone.utc).year
+        # resolve_log_year reads the clock itself; bracket that read so a UTC
+        # year rollover between its now() and ours cannot fail the test.
+        year_before = datetime.now(timezone.utc).year
+        result = resolve_log_year([str(log)], None)
+        year_after = datetime.now(timezone.utc).year
+        assert result in {year_before, year_after}
 
 
 class TestBlankLines:
