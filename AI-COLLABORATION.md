@@ -35,7 +35,7 @@ tests, because precision is the hard part. `?q=O'Brien` is not SQL injection, an
 10, API Security, Auth Testing, Privacy/GDPR, Test Data & Secrets — followed by a
 Release Risk go/no-go gate.
 
-## Four layers of defect, four different ways of finding them
+## Layers of defect, each found a different way
 
 The interesting result is that each layer caught things the previous one could
 not. That escalation is the whole argument for this workflow.
@@ -132,6 +132,34 @@ but *never* the enumeration one. Batch mode was fine — both findings reach the
 report — which is precisely why 135 green tests never caught it: nothing exercised
 the follow-mode de-dup path with a two-finding rule. One-line fix (category joins
 the key); a test that fails before and passes after pins it.
+
+### 6. A full five-dimension re-review before submission — converged, with one honest residual
+
+Before calling it done I ran the whole security battery again — Test Data &
+Secrets, OWASP, API Security, Auth, and Privacy — against the hardened tree (by
+now `ruff`-clean, 100% line coverage, tagged `v1.0.0`). No critical or high
+findings; the earlier fixes all held and were pinned by regression tests. Two
+things came back worth acting on:
+
+- **The same class as the B1 bug, one rule over.** The OWASP pass noticed that
+  `rate_limit_abuse` keys its state on `(ip, path)` but reports the IP as the
+  actor, so *its* two-endpoints-from-one-IP findings collide on the follow-mode
+  de-dup key exactly as the SSH findings did. It does not occur in the sample
+  data (the sample IP bursts a single endpoint), so — per the rule I'd been
+  holding, fix what the sample exercises, document the rest — it is written up as
+  a known limitation with the clean fix named, not built.
+- **A privacy control with 100% coverage but zero assertion.** API Security and
+  Privacy independently circled the same line: malformed log lines are truncated
+  to 200 chars before they reach the report — a data-minimization guard, since a
+  malformed line is where a stray secret sits. The slice *executed* under the
+  coverage run, so it counted as covered, but nothing *asserted* the cap: a
+  refactor dropping it would leak a whole secret-bearing line with the suite
+  still green. Now pinned by a test that feeds a 400-char secret and asserts it
+  never reaches the report.
+
+That second item is the sharpest lesson of the project restated: **100% coverage
+is not 100% tested.** A line can run in every test and still have none of them
+checking what it does.
 
 ## The takeaway
 

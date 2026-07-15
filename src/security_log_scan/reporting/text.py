@@ -25,7 +25,11 @@ _SEVERITY_STYLE = {
     Severity.LOW: "cyan",
 }
 
-_MAX_SHOWN_PARSE_ERRORS = 10
+# Matches the engine's sample-retention cap (_MAX_SAMPLED_PARSE_ERRORS = 5).
+# The engine only keeps 5 malformed lines, so a larger display cap here was dead
+# and could only ever drift above the retention bound - a display cap must never
+# exceed how much personal data was actually retained.
+_MAX_SHOWN_PARSE_ERRORS = 5
 
 
 def write_text_report(

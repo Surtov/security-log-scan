@@ -35,7 +35,7 @@ security-log-scan sample-logs/webserver.log sample-logs/auth.log --format json
 Run the test suite:
 
 ```bash
-pytest                 # 160 tests, 100% line coverage
+pytest                 # 161 tests, 100% line coverage
 pytest -p randomly     # random order - proves no inter-test dependencies
 ruff check .           # lint
 ```
@@ -200,10 +200,9 @@ security-log-scan /var/log/nginx/access.log /var/log/auth.log --follow
 ```
 
 ```
-[MEDIUM]   10.0.0.50 brute_force_web: 4 failed login attempts within 60s (no success observed)
-[CRITICAL] 10.0.0.50 brute_force_web: 4 failed login attempts followed by a successful login
-                     - likely account compromise  [correlated: auth+web]
-[HIGH]     203.0.113.9 sql_injection: 1 SQL injection payload(s), e.g. 'q=1 UNION SELECT * FROM users--'
+[MEDIUM] 10.0.0.50 brute_force_web: 4 failed login attempts from 10.0.0.50 within 60s (no success observed)
+[CRITICAL] 10.0.0.50 brute_force_web: 4 failed login attempts followed by a successful login from 10.0.0.50 - likely account compromise
+[HIGH] 10.0.0.88 sql_injection: 1 SQL injection payload(s) from 10.0.0.88, e.g. 'q=1 UNION SELECT * FROM users--'
 ```
 
 The same detection rules serve both modes — the tail source simply replaces the
@@ -271,6 +270,13 @@ Both behaviors are covered by regression tests in
   samples several and takes the majority). Well-formed web and auth lines cannot
   match each other's parser, so in practice this only matters for a file whose
   very first line is foreign — worth knowing, not worth a format war.
+- **`--follow` may under-report one IP bursting *several distinct endpoints*.**
+  The rate-limit rule tracks each endpoint separately but reports the IP as the
+  actor, so its per-endpoint alerts share a de-duplication key in live mode and
+  a second endpoint's burst can be suppressed. Batch mode reports every endpoint.
+  The clean fix is a per-finding de-dup discriminator (the same idea that fixed
+  the SSH brute-force / enumeration collision); it is not built because no burst
+  across multiple endpoints appears in the sample data.
 
 ## Assumptions (explicit)
 

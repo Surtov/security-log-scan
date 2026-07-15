@@ -239,6 +239,26 @@ class TestParseErrorMinimization:
         assert report["summary"]["parse_errors"] == 1
         assert report["parse_errors_truncated"] is False
 
+    def test_long_malformed_line_is_truncated_in_the_report(self, tmp_path):
+        # A malformed line is where a stray secret is most likely to sit, so the
+        # engine caps each sampled line's length. This pins that cap: without it,
+        # a huge malformed line would reproduce a whole secret verbatim into the
+        # report, and 100% line coverage would not notice.
+        log = tmp_path / "web.log"
+        secret_tail = "secret=" + "S" * 400
+        log.write_text(
+            '192.168.1.10 - - [03/Jul/2025:10:00:01 +0000] "GET / HTTP/1.1" 200 1\n'
+            "[MALFORMED " + "A" * 400 + " " + secret_tail + "\n",
+            encoding="utf-8",
+        )
+
+        result = CliRunner().invoke(main, [str(log), "--format", "json"])
+        report = json.loads(result.output)
+
+        shown = report["parse_errors"][0]["line"]
+        assert len(shown) <= 200
+        assert "S" * 400 not in shown  # the secret tail never reaches the report
+
     def test_text_report_says_how_many_malformed_lines_it_did_not_show(self, tmp_path):
         # The text report lists a handful of bad lines. It must still say how many
         # it withheld, or a corrupt log looks like a mildly untidy one.
